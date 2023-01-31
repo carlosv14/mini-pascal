@@ -1,0 +1,14 @@
+program Greetings;
+const
+message = ' Welcome to the world of Pascal ';
+
+var
+firstname, surname: string;
+
+begin
+   writeln('Please enter your first name: ');
+  
+   writeln('Please enter your surname: ')
+ 
+   writeln(message, ' ', firstname, ' ', surname);
+end.
