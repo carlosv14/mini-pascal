@@ -8,6 +8,9 @@
 LETTER [a-zA-Z]
 DIGIT [0-9]
 
+%x commenttype1
+%x commenttype2
+
 %%
 
 "+" {return '+';}
@@ -31,11 +34,18 @@ DIGIT [0-9]
 "and" {return TK_AND;}
 "or" {return TK_OR;}
 "not" {return TK_NOT;}
-"{" {return '{';}
-"}" {return '}';}
+"{" { BEGIN(commenttype1); } 
+<commenttype1>[\n] { line++; }
+<commenttype1>"}" { BEGIN(INITIAL); }
+<commenttype1>. {/* NADA */}
+"(*" { BEGIN(commenttype2); }
+<commenttype2>[\n] { line++; }
+<commenttype2>"*)" { BEGIN(INITIAL); }
+<commenttype2>. {/* NADA */}
 [ \t] { column++; }
 [ \n \r] { line++; }
 "program" {return KW_PROGRAM;}
+"procedure" {return KW_PROCEDURE;}
 "begin" {return KW_BEGIN;}
 "end" {return KW_END;}
 "writeln" {return KW_WRITELN;}
@@ -53,6 +63,12 @@ DIGIT [0-9]
 "boolean" {return KW_BOOLEAN;}
 "char" {return KW_CHAR;}
 "string" {return KW_STRING;}
+"true" { return KW_TRUE; }
+"false" { return KW_FALSE; }
+"array" { return KW_ARRAY; }
+"of" { return KW_OF; }
+"[" { return '['; }
+"]" { return ']'; }
 "'"[^']{0,1}"'" {return TK_LIT_CHAR;}
 "'"[^']*"'" {return TK_LIT_STRING;}
 {DIGIT}+ {return TK_LIT_INT;}

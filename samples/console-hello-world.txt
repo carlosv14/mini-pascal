@@ -7,8 +7,10 @@ firstname, surname: string;
 
 begin
    writeln('Please enter your first name: ');
+   readln(firstname);
   
-   writeln('Please enter your surname: ')
+   writeln('Please enter your surname: ');
+   readln(surname);
  
    writeln(message, ' ', firstname, ' ', surname);
 end.
