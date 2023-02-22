@@ -63,17 +63,19 @@ DIGIT [0-9]
 "boolean" {return KW_BOOLEAN;}
 "char" {return KW_CHAR;}
 "string" {return KW_STRING;}
-"true" { return KW_TRUE; }
-"false" { return KW_FALSE; }
+"true" { yylval.bool_t = true; return KW_TRUE; }
+"false" { yylval.bool_t = false; return KW_FALSE; }
 "array" { return KW_ARRAY; }
 "of" { return KW_OF; }
+"for" { return KW_FOR; }
+"to" { return KW_TO; }
 "[" { return '['; }
 "]" { return ']'; }
-"'"[^']{0,1}"'" {return TK_LIT_CHAR;}
-"'"[^']*"'" {return TK_LIT_STRING;}
+"'"[^']{0,1}"'" { yylval.char_t = yytext[0]; return TK_LIT_CHAR;}
+"'"[^']*"'" { yylval.string_t = strdup(yytext); return TK_LIT_STRING;}
 {DIGIT}+ {return TK_LIT_INT;}
-{DIGIT}+"."{DIGIT}+ {return TK_LIT_FLOAT;}
-{LETTER}({DIGIT}|{LETTER}|_)* {return TK_ID;}
+{DIGIT}+"."{DIGIT}+ { yylval.float_t = atof(yytext); return TK_LIT_FLOAT;}
+{LETTER}({DIGIT}|{LETTER}|_)* { yylval.string_t = strdup(yytext); return TK_ID;}
 
 . {printf("caracter invalido %c en la linea: %d\n", yytext[0], yylineno);}
 %%
