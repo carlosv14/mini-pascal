@@ -73,7 +73,7 @@ DIGIT [0-9]
 "]" { return ']'; }
 "'"[^']{0,1}"'" { yylval.char_t = yytext[0]; return TK_LIT_CHAR;}
 "'"[^']*"'" { yylval.string_t = strdup(yytext); return TK_LIT_STRING;}
-{DIGIT}+ {return TK_LIT_INT;}
+{DIGIT}+ { yylval.int_t = atoi(yytext); return TK_LIT_INT;}
 {DIGIT}+"."{DIGIT}+ { yylval.float_t = atof(yytext); return TK_LIT_FLOAT;}
 {LETTER}({DIGIT}|{LETTER}|_)* { yylval.string_t = strdup(yytext); return TK_ID;}
 

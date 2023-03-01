@@ -1,7 +1,6 @@
 program Greetings;
 const
-message = ' Welcome to the world of Pascal ';
-
+   message : string = 'Hola mundo';
 var
 firstname, surname: string;
 

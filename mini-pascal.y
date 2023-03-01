@@ -58,7 +58,7 @@
 
 program: KW_PROGRAM TK_ID ';'
             block_statement
-           '.' { $$ = new MainStatement($2, $4, line, column);}
+           '.' { $$ = new MainStatement($2, $4, line, column); $$->evaluateSemantic();}
        ;
 
 block_statement:
@@ -70,19 +70,37 @@ block_statement:
 
 declarations: optional_const_declarations
               optional_var_declarations
-              procedure_function_declarations { $$ = $1; }
+              procedure_function_declarations { $$ = $1;
+                list<Declaration *>::iterator it = $2->begin();
+                while(it != $2->end()){
+                    $$->push_back((*it));
+                    it++;
+                }
+            
+                it = $3->begin();
+                while(it != $3->end()){
+                    $$->push_back((*it));
+                    it++;
+                }
+            }
             ;
 
-optional_const_declarations: KW_CONST const_declarations { $$ = new list<Declaration *>; /*$$->assign($2, );*/}
+optional_const_declarations: KW_CONST const_declarations { $$  = $2;}
                            | /* epsilon */ { $$ = new list<Declaration *>; }
                            ;
 
-optional_var_declarations: KW_VAR var_declarations { $$ = new list<Declaration *>; /*$$->push_back($2);*/}
+optional_var_declarations: KW_VAR var_declarations { $$ = $2;}
                          | /* epsilon */ { $$ = new list<Declaration *>; }
                          ;
 
 procedure_function_declarations: procedure_declarations
-                                 function_declarations { $$ = $1; /*$$->assign($2);*/ }
+                                 function_declarations { $$ = $1;
+                                    list<Declaration *>::iterator it = $2->begin();
+                                    while(it != $2->end()){
+                                        $$->push_back((*it));
+                                        it++;
+                                    }
+                                  }
                                | procedure_declarations { $$ = $1; }
                                | function_declarations { $$ = $1; }
                                | /* epsilon */ {$$ = new list<Declaration *>;}
@@ -102,11 +120,11 @@ procedure_declaration: KW_PROCEDURE TK_ID '(' var_declaration ')' ';' block_stat
 function_declaration: KW_FUNCTION TK_ID '(' var_declaration ')' ':' type ';' block_statement ';' { $$ = new FunctionDeclarationStatement($2, $4, $9, $7, line, column);}
                     ;
 
-const_declarations: const_declaration ';' const_declarations {$$ = $3; $$->push_back($1);}
+const_declarations: const_declaration ';' const_declarations {$$ = $3; $$->push_front($1);}
                   | const_declaration ';' {$$ = new list<Declaration *>; $$->push_back($1);}
                   ;
 
-var_declarations: var_declaration ';' var_declarations {$$ = $3; $$->push_back($1);}
+var_declarations: var_declaration ';' var_declarations {$$ = $3; $$->push_front($1);}
                 | var_declaration ';' {$$ = new list<Declaration *>; $$->push_back($1);}
                 ;
 
@@ -127,7 +145,7 @@ literal: TK_LIT_STRING { $$ = new StringExpr($1, line, column); }
        | KW_FALSE { $$ = new BoolExpr($1, line, column);}
        ;
 
-type: type_identifier { $$ = new ComplexType((PrimitiveType)$1); }
+type: type_identifier { $$ = new ComplexType((PrimitiveType)$1, false); }
     | KW_ARRAY '[' TK_LIT_INT '.''.' TK_LIT_INT ']' KW_OF type_identifier { $$ = new ArrayType($3, $6, (PrimitiveType)$9); }
     ;
 

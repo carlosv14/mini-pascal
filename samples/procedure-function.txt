@@ -1,7 +1,7 @@
 program exProcedure;
 var
    a, b, c,  min, m: integer;
-procedure findMin(x, y, z: integer);
+procedure findMin(x, y: integer; a, b: real);
 
 begin
    if x < y then
@@ -20,7 +20,7 @@ end; {
 begin
    writeln(' Enter three numbers: ');
    readln( a, b, c);
-   findMin(a, b, c, min); (* Procedure call *)
+   findMin(a, b, c); (* Procedure call *)
    
    writeln(' Minimum: ', min);
 end.

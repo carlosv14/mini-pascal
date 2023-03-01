@@ -7,16 +7,18 @@ using namespace std;
 
 class ComplexType{
     public:
-        ComplexType(PrimitiveType primitiveType){
+        ComplexType(PrimitiveType primitiveType, bool isArray){
             this->primitiveType = primitiveType;
+            this->isArray = isArray;
         }
         PrimitiveType primitiveType;
+        bool isArray;
 };
 
 class ArrayType : public ComplexType{
     public:
         ArrayType(int start, int end, PrimitiveType primitiveType)
-            : ComplexType(primitiveType){
+            : ComplexType(primitiveType, true){
             this->start = start;
             this->end = end;
             this->primitiveType = primitiveType;
@@ -42,6 +44,7 @@ class Expression : public Node{
 
         }
         virtual void print() = 0;
+        virtual PrimitiveType getType() = 0;
 };
 
 class IdExpr : public Expression{
@@ -53,6 +56,7 @@ class IdExpr : public Expression{
         }
         string id;
         void print();
+        PrimitiveType getType();
 };
 
 class ArrayExpr : public Expression{
@@ -68,6 +72,7 @@ class ArrayExpr : public Expression{
         IdExpr * id;
         Expression * index;
         void print();
+        PrimitiveType getType();
 };
 
 class StringExpr : public Expression{
@@ -77,6 +82,7 @@ class StringExpr : public Expression{
         }
         string value;
         void print();
+        PrimitiveType getType();
 };
 
 class CharExpr : public Expression{
@@ -86,6 +92,7 @@ class CharExpr : public Expression{
         }
         char value;
         void print();
+        PrimitiveType getType();
 };
 
 class FloatExpr : public Expression{
@@ -95,6 +102,7 @@ class FloatExpr : public Expression{
         }
         float value;
         void print();
+        PrimitiveType getType();
 };
 
 class IntExpr : public Expression{
@@ -104,6 +112,7 @@ class IntExpr : public Expression{
         }
         int value;
         void print();
+        PrimitiveType getType();
 };
 
 class BoolExpr : public Expression{
@@ -113,6 +122,7 @@ class BoolExpr : public Expression{
         }
         bool value;
         void print();
+        PrimitiveType getType();
 };
 
 class UnaryExpr : public Expression{
@@ -125,17 +135,20 @@ class UnaryExpr : public Expression{
         UnaryOperator op;
         Expression * expr;
         void print();
+        PrimitiveType getType();
 };
 
 class BinaryExpr : public Expression{
     public:
         BinaryExpr(Expression * left, Expression * right, int line, int column) : 
             Expression(line, column){
-
+            this->left = left;
+            this->right = right;
         }
         Expression * left;
         Expression * right;
         virtual void print() = 0;
+        virtual PrimitiveType getType() = 0;
 };
 
 #define IMPLEMENT_BINARY_EXPR(name)\
@@ -143,6 +156,7 @@ class name##Expr : public BinaryExpr{\
     public: \
         name##Expr(Expression * left, Expression * right, int line, int column): BinaryExpr(left, right, line, column){}\
         void print();\
+        PrimitiveType getType();\
 };
 
 
@@ -150,6 +164,7 @@ class Statement : public Node{
     public:
         Statement(int line, int column) : Node(line, column){}
         virtual void print() = 0;
+        virtual void evaluateSemantic() = 0;
 };
 
 class WriteStatement : public Statement{
@@ -160,6 +175,7 @@ class WriteStatement : public Statement{
         }
         list<Expression *> * expressions;
         void print();
+        void evaluateSemantic();
 };
 
 class ReadStatement : public Statement{
@@ -170,12 +186,14 @@ class ReadStatement : public Statement{
         }
         list<Expression *> * expressions;
         void print();
+        void evaluateSemantic();
 };
 
 class IfStatement : public Statement{
     public:
         IfStatement(Expression * expression, Statement * trueStatement, Statement * falseStatement, int line, int column) :
             Statement(line, column){
+            this->expression = expression;
             this->trueStatement = trueStatement;
             this->falseStatement = falseStatement;
         }
@@ -183,6 +201,7 @@ class IfStatement : public Statement{
         Statement * trueStatement;
         Statement * falseStatement;
         void print();
+        void evaluateSemantic();
 };
 
 class MethodInvocationExpr : public Expression{
@@ -196,16 +215,18 @@ class MethodInvocationExpr : public Expression{
         IdExpr * id;
         list<Expression *> * args;
         void print();
+        PrimitiveType getType();
 };
 
 class ExpressionStatement : public Statement{
     public:
         ExpressionStatement(Expression * expr, int line, int column)
             : Statement(line, column){
-
+            this->expr = expr;
         }
         Expression * expr;
         void print();
+        void evaluateSemantic();
 };
 
 class AssignationStatement : public Statement{
@@ -222,6 +243,7 @@ class AssignationStatement : public Statement{
         Expression * index;
         bool isArray;
         void print();
+        void evaluateSemantic();
 };
 
 class WhileStatement : public Statement{
@@ -234,6 +256,7 @@ class WhileStatement : public Statement{
         Expression * expression;
         Statement * stmt;
         void print();
+        void evaluateSemantic();
 };
 
 class ForStatement: public Statement{
@@ -250,6 +273,7 @@ class ForStatement: public Statement{
         Expression * toExpr;
         Statement * stmt;
         void print();
+        void evaluateSemantic();
 };
 
 class MainStatement: public Statement{
@@ -262,12 +286,14 @@ class MainStatement: public Statement{
         string id;
         Statement * stmt;
         void print();
+        void evaluateSemantic();
 };
 
 class Declaration : public Statement{
     public:
         Declaration(int line, int column) : Statement(line, column){}
         virtual void print() = 0;
+        virtual void evaluateSemantic() = 0;
 };
 
 class VarDeclarationStatement : public Declaration{
@@ -280,7 +306,7 @@ class VarDeclarationStatement : public Declaration{
         list<string> * ids;
         ComplexType * type;
         void print();
-
+        void evaluateSemantic();
 };
 
 
@@ -296,6 +322,7 @@ class ConstDeclarationStatement : public Declaration{
         ComplexType * type;
         Expression * literal;
         void print();
+        void evaluateSemantic();
 };
 class ProcedureDeclarationStatement: public Declaration{
     public:
@@ -309,6 +336,7 @@ class ProcedureDeclarationStatement: public Declaration{
         VarDeclarationStatement * varDeclaration;
         Statement * statement;
         void print();
+        void evaluateSemantic();
 };
 
 class FunctionDeclarationStatement : public Declaration{
@@ -326,6 +354,7 @@ class FunctionDeclarationStatement : public Declaration{
         Statement * statement;
         ComplexType * type;
         void print();
+        void evaluateSemantic();
 };
 
 class BlockStatement: public Statement{
@@ -338,6 +367,17 @@ class BlockStatement: public Statement{
         list<Declaration *> * declarations;
         list<Statement * > * stmts;
         void print();
+        void evaluateSemantic();
+};
+
+class MethodInformation{
+    public:
+        PrimitiveType returnType;
+        VarDeclarationStatement * parameters;
+        MethodInformation(PrimitiveType returnType, VarDeclarationStatement * parameters){
+            this->returnType = returnType;
+            this->parameters = parameters;
+        }
 };
 
 IMPLEMENT_BINARY_EXPR(And);
