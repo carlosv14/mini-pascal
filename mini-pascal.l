@@ -71,7 +71,7 @@ DIGIT [0-9]
 "to" { return KW_TO; }
 "[" { return '['; }
 "]" { return ']'; }
-"'"[^']{0,1}"'" { yylval.char_t = yytext[0]; return TK_LIT_CHAR;}
+"'"[^']{0,1}"'" { yylval.char_t = yytext[1]; return TK_LIT_CHAR;}
 "'"[^']*"'" { yylval.string_t = strdup(yytext); return TK_LIT_STRING;}
 {DIGIT}+ { yylval.int_t = atoi(yytext); return TK_LIT_INT;}
 {DIGIT}+"."{DIGIT}+ { yylval.float_t = atof(yytext); return TK_LIT_FLOAT;}

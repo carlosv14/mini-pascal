@@ -4,12 +4,28 @@
 }
 %{
     #include <cstdio>
+    #include "asm.h"
+    #include <fstream>
+    #include <iostream>
     extern int yylineno;
     int yylex();
     extern int line;
     extern int column;
+    asmcode assemblyResult;
     void yyerror(const char * message){
         fprintf(stderr, "Error: %s in line: %d and column %d", message, line, column);
+    }
+
+    void writeFile(string name){
+        ofstream file;
+        file.open(name);
+        file<<".data"<<endl
+        <<"\t"<< assemblyResult.data<<endl
+        <<"\t" << "nextline: .asciiz \"\\n\""<<endl
+        <<".text"
+        <<"\t"<< assemblyResult.text<<endl
+        <<".globl main"<<endl
+        <<"\t"<< assemblyResult.code<<endl;
     }
 %}
 
@@ -23,8 +39,8 @@
     Statement * statement_t;
     list<Expression *> * expr_list_t;
     list<Statement *> * statement_list_t;
-    list<Declaration *> * declaration_list_t;
-    Declaration * declaration_t;
+    list<DeclarationStatement *> * declaration_list_t;
+    DeclarationStatement * declaration_t;
     VarDeclarationStatement * var_declaration_t;
     list<string> * string_list_t;
     ComplexType * type_t;
@@ -58,7 +74,11 @@
 
 program: KW_PROGRAM TK_ID ';'
             block_statement
-           '.' { $$ = new MainStatement($2, $4, line, column); $$->evaluateSemantic();}
+           '.' { $$ = new MainStatement($2, $4, line, column); $$->evaluateSemantic();
+                string code = $$->generateCode();
+                assemblyResult.code += code;
+                writeFile("result.asm");
+           }
        ;
 
 block_statement:
@@ -71,7 +91,7 @@ block_statement:
 declarations: optional_const_declarations
               optional_var_declarations
               procedure_function_declarations { $$ = $1;
-                list<Declaration *>::iterator it = $2->begin();
+                list<DeclarationStatement *>::iterator it = $2->begin();
                 while(it != $2->end()){
                     $$->push_back((*it));
                     it++;
@@ -86,16 +106,16 @@ declarations: optional_const_declarations
             ;
 
 optional_const_declarations: KW_CONST const_declarations { $$  = $2;}
-                           | /* epsilon */ { $$ = new list<Declaration *>; }
+                           | /* epsilon */ { $$ = new list<DeclarationStatement *>; }
                            ;
 
 optional_var_declarations: KW_VAR var_declarations { $$ = $2;}
-                         | /* epsilon */ { $$ = new list<Declaration *>; }
+                         | /* epsilon */ { $$ = new list<DeclarationStatement *>; }
                          ;
 
 procedure_function_declarations: procedure_declarations
                                  function_declarations { $$ = $1;
-                                    list<Declaration *>::iterator it = $2->begin();
+                                    list<DeclarationStatement *>::iterator it = $2->begin();
                                     while(it != $2->end()){
                                         $$->push_back((*it));
                                         it++;
@@ -103,15 +123,15 @@ procedure_function_declarations: procedure_declarations
                                   }
                                | procedure_declarations { $$ = $1; }
                                | function_declarations { $$ = $1; }
-                               | /* epsilon */ {$$ = new list<Declaration *>;}
+                               | /* epsilon */ {$$ = new list<DeclarationStatement *>;}
                                ;
 
 procedure_declarations: procedure_declaration procedure_declarations { $$ = $2; $$->push_back($1);}
-                      | procedure_declaration { $$ = new list<Declaration *>; $$->push_back($1);}
+                      | procedure_declaration { $$ = new list<DeclarationStatement *>; $$->push_back($1);}
                       ;
 
 function_declarations: function_declarations function_declaration { $$ = $1; $$->push_back($2);}
-                     | function_declaration { $$ = new list<Declaration *>; $$->push_back($1);}
+                     | function_declaration { $$ = new list<DeclarationStatement *>; $$->push_back($1);}
                      ;
 
 procedure_declaration: KW_PROCEDURE TK_ID '(' var_declaration ')' ';' block_statement ';' { $$ = new ProcedureDeclarationStatement($2, $4, $7, line, column);}
@@ -121,11 +141,11 @@ function_declaration: KW_FUNCTION TK_ID '(' var_declaration ')' ':' type ';' blo
                     ;
 
 const_declarations: const_declaration ';' const_declarations {$$ = $3; $$->push_front($1);}
-                  | const_declaration ';' {$$ = new list<Declaration *>; $$->push_back($1);}
+                  | const_declaration ';' {$$ = new list<DeclarationStatement *>; $$->push_back($1);}
                   ;
 
 var_declarations: var_declaration ';' var_declarations {$$ = $3; $$->push_front($1);}
-                | var_declaration ';' {$$ = new list<Declaration *>; $$->push_back($1);}
+                | var_declaration ';' {$$ = new list<DeclarationStatement *>; $$->push_back($1);}
                 ;
 
 var_declaration: id_list ':' type { $$ = new VarDeclarationStatement($1, $3, line, column); }

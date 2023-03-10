@@ -1,9 +1,30 @@
 #include "ast.h"
 #include <iostream>
+#include <sstream>
 #include <map>
+#include <set>
+#include "asm.h"
+
+extern asmcode assemblyResult;
 
 using namespace std;
+
+int globalStackPointer = 0;
+
+class CodeGenerationVarInfo{
+    public:
+        CodeGenerationVarInfo(bool isParameter, ComplexType * type, int offset){
+            this->isParameter = isParameter;
+            this->offset = offset;
+            this->type = type;
+        }
+        bool isParameter;
+        ComplexType * type;
+        int offset;
+};
+
 map<string, MethodInformation *> methods = {};
+map<string, CodeGenerationVarInfo *> codeGenerationVars = {};
 
 void IdExpr::print(){
     cout<<"Id expr: "<< this->id <<" line: "<< this->line << " column : "<<this->column<<endl;
@@ -89,7 +110,7 @@ void MainStatement::print(){
 
 void BlockStatement::print(){
     cout<<"Block statement line: "<<this->line << " column : "<<this->column<<endl;
-    list<Declaration *>::iterator it = this->declarations->begin();
+    list<DeclarationStatement *>::iterator it = this->declarations->begin();
     while (it != this->declarations->end())
     {
         (*it)->print();
@@ -516,7 +537,7 @@ void FunctionDeclarationStatement::evaluateSemantic(){
 
 void BlockStatement::evaluateSemantic(){
     pushContext();
-    list<Declaration *>::iterator itDec = this->declarations->begin();
+    list<DeclarationStatement *>::iterator itDec = this->declarations->begin();
     while (itDec != this->declarations->end())
     {
         (*itDec)->evaluateSemantic();
@@ -530,3 +551,425 @@ void BlockStatement::evaluateSemantic(){
     }
     popContext();
 }
+
+// end get type
+
+// begin code gen
+
+const char * intTemps[]{ "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9" };
+set<string> intTempMap;
+#define INT_TEMP_COUNT 10
+
+const char * floatTemps[]{ "$f0", "$f1", "$f2", "$f3", "$f4", "$f5", "$f6", "$f7", "$f8", "$f9", "$f10", "$f11", "$f12", "$f13", "$f14", "$f15", "$f16", "$f17", "$f18", "$f19", "$f20", "$f21", "$f22", "$f23", "$f24", "$f25", "$f26", "$f27", "$f28", "$f29", "$f30", "$f31" };
+set<string> floatTempMap;
+#define FLOAT_TEMP_COUNT 32
+
+string getIntTemp(){
+    for (int i = 0; i < INT_TEMP_COUNT; i++)
+    {
+        if (intTempMap.find(intTemps[i]) == intTempMap.end())
+        {
+            intTempMap.insert(intTemps[i]);
+            return string(intTemps[i]);
+        }
+    }
+    cerr<<"No hay registros temporales disponibles"<<endl;
+    exit(0);
+}
+
+string getFloatTemp(){
+    for (int i = 0; i < FLOAT_TEMP_COUNT; i++)
+    {
+        if (floatTempMap.find(floatTemps[i]) == floatTempMap.end())
+        {
+            floatTempMap.insert(floatTemps[i]);
+            return string(floatTemps[i]);
+        }
+    }
+    cerr<<"No hay registros temporales disponibles"<<endl;
+    exit(0);
+}
+
+void releaseRegister(string temp){
+    intTempMap.erase(temp);
+    floatTempMap.erase(temp);
+}
+
+int labelCounter = 0;
+string newLabel(string prefix){
+    stringstream label;
+    label <<prefix<<"_"<<labelCounter;
+    labelCounter++;
+    return label.str();
+}
+
+/*
+    print("hola");
+    
+
+    string_0: .asciiz "hola"
+
+    la $a0, string_0
+*/
+
+void StringExpr::generateCode(CodeContext &context){
+    string label = newLabel("string");
+    stringstream code;
+    code << label<<": .asciiz "<< this->value<<endl;
+    context.code = "";
+    context.place = label;
+    context.type = new ComplexType((PrimitiveType)STRING, false);
+    string finalCode = code.str();
+    replace(finalCode.begin(), finalCode.end(), '\'', '\"');
+    assemblyResult.data += finalCode;
+}
+
+
+void IntExpr::generateCode(CodeContext &context){
+    stringstream code;
+    string temp = getIntTemp();
+    code<<"li "<<temp<<", "<< this->value<<endl;
+    context.code = code.str();
+    context.place = temp;
+    context.type = new ComplexType((PrimitiveType)INTEGER, false);
+}
+
+void FloatExpr::generateCode(CodeContext &context){
+    stringstream code;
+    string temp = getFloatTemp();
+    code<<"li.s "<<temp<<", "<< this->value<<endl;
+    context.code = code.str();
+    context.place = temp;
+    context.type = new ComplexType((PrimitiveType)REAL, false);
+}
+
+void IdExpr::generateCode(CodeContext &context){
+    if (codeGenerationVars.find(this->id) == codeGenerationVars.end())
+    {
+        context.type = new ComplexType(globalVars[this->id], false);
+        if (globalVars[this->id] == REAL)
+        {
+            string floatTemp = getFloatTemp();
+            context.place = floatTemp;
+            context.code = "l.s "+floatTemp + ", " + this->id +"\n";
+        }else if (globalVars[this->id] == INTEGER){
+            string intTemp = getIntTemp();
+            context.place = intTemp;
+            context.code = "lw "+intTemp + ", " + this->id +"\n";
+        }
+    }else{
+        context.type = codeGenerationVars[this->id]->type;
+        if (codeGenerationVars[this->id]->type->primitiveType == REAL && !codeGenerationVars[this->id]->type->isArray)
+        {
+            string floatTemp = getFloatTemp();
+            context.place = floatTemp;
+            context.code = "l.s "+floatTemp + ", " + to_string(codeGenerationVars[this->id]->offset) +"($sp)\n";
+        }
+        else if (codeGenerationVars[this->id]->type->primitiveType == INTEGER && !codeGenerationVars[this->id]->type->isArray){
+            string intTemp = getIntTemp();
+            context.place = intTemp;
+            context.code = "lw "+intTemp + ", " + to_string(codeGenerationVars[this->id]->offset) +"($sp)\n";
+        }
+    }
+    
+}
+
+void ArrayExpr::generateCode(CodeContext &context){
+    
+}
+
+void CharExpr::generateCode(CodeContext &context){
+    stringstream code;
+    string temp = getIntTemp();
+    code<<"li "<<temp<<", '"<< this->value<<"'"<<endl;
+    context.code = code.str();
+    context.place = temp;
+    context.type = new ComplexType((PrimitiveType)CHAR, false);
+}
+
+void BoolExpr::generateCode(CodeContext &context){
+    
+}
+
+void UnaryExpr::generateCode(CodeContext &context){
+    
+}
+
+void MethodInvocationExpr::generateCode(CodeContext &context){
+    
+}
+
+#define GEN_CODE_BINARY_EXPR(name)\
+void name##Expr::generateCode(CodeContext &context){\
+};
+
+string intArithmetic(CodeContext &leftCode, CodeContext &rightCode, CodeContext &resultCode, char op){
+    resultCode.place = getIntTemp();
+    stringstream code;
+    switch (op)
+    {
+    case '+':
+        code<<"add "<<resultCode.place<<", "<< leftCode.place<<", "<<rightCode.place<<endl;
+        break;
+     case '-':
+        code<<"sub "<<resultCode.place<<", "<< leftCode.place<<", "<<rightCode.place<<endl;
+        break;
+    case '*':
+        code<<"mult "<< leftCode.place<<", "<<rightCode.place<<endl<< "mflo "<<resultCode.place;
+        break;
+    case '/':
+        code<<"div "<< leftCode.place<<", "<<rightCode.place<<endl<< "mflo "<<resultCode.place;
+        break;
+    default:
+        break;
+    }
+    return code.str();
+}
+
+#define GEN_ARIT_CODE_BINARY_EXPR(name, op)\
+void name##Expr::generateCode(CodeContext &context){\
+    CodeContext leftCode, rightCode;\
+    stringstream code;\
+    this->left->generateCode(leftCode);\
+    this->right->generateCode(rightCode);\
+    if (leftCode.type->primitiveType == INTEGER && rightCode.type->primitiveType == INTEGER)\
+    {\
+        context.type = leftCode.type;\
+        releaseRegister(leftCode.place);\
+        releaseRegister(rightCode.place);\
+        code<< leftCode.code<<endl\
+        <<rightCode.code<<endl\
+        << intArithmetic(leftCode, rightCode, context, op)<<endl;\
+    }\
+    context.code = code.str();\
+}\
+
+GEN_CODE_BINARY_EXPR(And);
+GEN_ARIT_CODE_BINARY_EXPR(Mod, '%');
+GEN_ARIT_CODE_BINARY_EXPR(Div, '/');
+GEN_ARIT_CODE_BINARY_EXPR(Mult, '*');
+GEN_CODE_BINARY_EXPR(Or);
+GEN_ARIT_CODE_BINARY_EXPR(Sub, '-');
+GEN_ARIT_CODE_BINARY_EXPR(Add, '+');
+GEN_CODE_BINARY_EXPR(Eq);
+GEN_CODE_BINARY_EXPR(Neq);
+GEN_CODE_BINARY_EXPR(Gt);
+GEN_CODE_BINARY_EXPR(Gte);
+GEN_CODE_BINARY_EXPR(Lte);
+
+void LtExpr::generateCode(CodeContext &context){
+    CodeContext leftCode, rightCode;
+    stringstream code;
+    this->left->generateCode(leftCode);
+    this->right->generateCode(rightCode);
+    if (leftCode.type->primitiveType == INTEGER && rightCode.type->primitiveType == INTEGER)
+    {
+        context.type = leftCode.type;
+        code<<leftCode.code<<endl
+        <<rightCode.code<<endl;
+        releaseRegister(leftCode.place);
+        releaseRegister(rightCode.place);
+        string temp = getIntTemp();
+        code<<"slt "<<temp<<", "<<leftCode.place<<", "<<rightCode.place<<endl;
+        context.place = temp;
+    }else{
+        context.type = leftCode.type;
+        code<<leftCode.code<<endl
+        <<rightCode.code<<endl;
+        releaseRegister(leftCode.place);
+        releaseRegister(rightCode.place);
+        string temp = getIntTemp();
+        code<<"c.lt.s "<<leftCode.place<<", "<<rightCode.place<<endl;
+        context.place = temp;
+    }
+    context.code= code.str();
+}
+
+string WriteStatement::generateCode(){
+    list<Expression*>::iterator it = this->expressions->begin();
+    stringstream code;
+    while (it != this->expressions->end())
+    {
+        CodeContext exprContext;
+        (*it)->generateCode(exprContext);
+        releaseRegister(exprContext.place);
+        code << exprContext.code<<endl;
+        if (exprContext.type->primitiveType == INTEGER)
+        {
+            code<<"move $a0, "<<exprContext.place<<endl
+            <<"li $v0, 1"<<endl;
+        }else if (exprContext.type->primitiveType == REAL)
+        {   
+            code<<"mov.s $f12, "<<exprContext.place<<endl
+            << "li $v0, 2"<<endl;
+        }else if(exprContext.type->primitiveType == STRING){
+            code<<"la $a0, "<<exprContext.place<<endl
+            <<"li $v0, 4"<<endl;
+        }else if(exprContext.type->primitiveType == CHAR){
+            code<<"move $a0, "<<exprContext.place<<endl
+            <<"li $v0, 11"<<endl;
+        }
+        
+        code<<"syscall"<<endl;
+        it++;
+    }
+    code <<"la $a0, nextline"<<endl
+        <<"li $v0, 4"<<endl
+        <<"syscall"<<endl;
+    return code.str();
+}
+
+string ReadStatement::generateCode(){
+    list<Expression*>::iterator it = this->expressions->begin();
+    stringstream code;
+    while (it != this->expressions->end())
+    {
+        CodeContext exprContext;
+        (*it)->generateCode(exprContext);
+        releaseRegister(exprContext.place);
+        code << exprContext.code<<endl;
+        if (exprContext.type->primitiveType == INTEGER)
+        {
+            code<<"li $v0, 5"<<endl
+            <<"syscall"<<endl
+            << "move "<<exprContext.place<<", $v0";
+        }else if (exprContext.type->primitiveType == REAL)
+        {   
+            code<<"li $v0, 6"<<endl
+            <<"syscall"<<endl
+            << "mov.s "<<exprContext.place<<", $f0";
+        }else if(exprContext.type->primitiveType == STRING){
+           /*
+            TODOOOO.
+           */
+        }else if(exprContext.type->primitiveType == CHAR){
+           code<<"li $v0, 12"<<endl
+            <<"syscall"<<endl
+            << "move "<<exprContext.place<<", $v0";
+        }
+        it++;
+    }
+    
+    cout<<" this is read code: "<< code.str()<<endl; 
+    return code.str();
+}
+
+string IfStatement::generateCode(){
+    return "";
+}
+
+string ExpressionStatement::generateCode(){
+    return "";
+}
+
+string AssignationStatement::generateCode(){
+    CodeContext rightSideCode;
+    stringstream code;
+    this->expr->generateCode(rightSideCode);
+    code << rightSideCode.code;
+    if (codeGenerationVars.find(this->id) == codeGenerationVars.end())
+    {
+        if (rightSideCode.type->primitiveType == INTEGER && !rightSideCode.type->isArray)
+        {
+            code<<"sw "<<rightSideCode.place<<", "<<this->id<<endl;
+        }
+        else if (rightSideCode.type->primitiveType == REAL && !rightSideCode.type->isArray)
+        {
+            code<<"s.s "<<rightSideCode.place<<", "<<this->id<<endl;
+        }
+    }else{
+         if (rightSideCode.type->primitiveType == INTEGER && !rightSideCode.type->isArray)
+        {
+            code<<"sw "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
+        }
+        else if (rightSideCode.type->primitiveType == REAL && !rightSideCode.type->isArray)
+        {
+            code<<"s.s "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
+        }
+    }
+    releaseRegister(rightSideCode.place);
+    return code.str();
+}
+
+string WhileStatement::generateCode(){
+    stringstream code;
+    string whileLabel = newLabel("while");
+    string endWhile = newLabel("endWhile");
+    CodeContext exprCode;
+    this->expression->generateCode(exprCode);
+    releaseRegister(exprCode.place);
+    code<< whileLabel<<": "<<endl
+    << exprCode.code << endl;
+    if (exprCode.type->primitiveType == INTEGER)
+    {
+        code<<"beqz "<<exprCode.place<<", "<<endWhile;
+    }else{
+        code<<"bc1f "<<endWhile<<endl;
+    }
+    code<<this->stmt->generateCode()<<endl
+    <<"j "<<whileLabel<<endl
+    <<endWhile<<": "<<endl;
+    
+    return code.str();
+}
+
+string ForStatement::generateCode(){
+    return "";
+}
+
+string MainStatement::generateCode(){
+    stringstream code;
+    code<<"main: "<<endl
+    <<this->stmt->generateCode()<<endl
+    <<"li $v0, 10"<<endl
+    <<"syscall"<<endl;
+    return code.str();
+}
+
+string VarDeclarationStatement::generateCode(){
+    list<string>::iterator idIt = this->ids->begin();
+    while (idIt != this->ids->end())
+    {
+        if (!this->type->isArray)
+        {
+            codeGenerationVars[(*idIt)] = new CodeGenerationVarInfo(false, this->type, globalStackPointer);
+            globalStackPointer+=4;
+        }
+        
+        idIt++;
+    }
+    return "";
+}
+
+string ConstDeclarationStatement::generateCode(){
+    return "";
+}
+
+string ProcedureDeclarationStatement::generateCode(){
+    return "";
+}
+
+string FunctionDeclarationStatement::generateCode(){
+    return "";
+}
+
+string BlockStatement::generateCode(){
+    stringstream code;
+    list<DeclarationStatement*>::iterator declIt = this->declarations->begin();
+    while (declIt != this->declarations->end())
+    {
+        code<<(*declIt)->generateCode();
+        declIt++;
+    }
+    
+
+    list<Statement *>::iterator it = this->stmts->begin();
+    while (it != this->stmts->end())
+    {
+        code<<(*it)->generateCode();
+        it++;
+    }
+    
+    return code.str();
+}
+// end code gen
