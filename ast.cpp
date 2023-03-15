@@ -185,6 +185,7 @@ PrimitiveType UnaryExpr::getType(){
 map<string, PrimitiveType> exprResultTypes = {
     {"INTEGER,INTEGER", INTEGER},
     {"INTEGER,REAL", REAL},
+    {"REAL,REAL", REAL},
     {"REAL,INTEGER", REAL},
     {"STRING,STRING", STRING},
     {"STRING,CHAR", STRING},
@@ -647,6 +648,13 @@ void IdExpr::generateCode(CodeContext &context){
     if (codeGenerationVars.find(this->id) == codeGenerationVars.end())
     {
         context.type = new ComplexType(globalVars[this->id], false);
+        if (globalVars[this->id] == NONE)
+        {
+            string temp = getIntTemp();
+            context.code = "la " + temp +", "+ this->id + "\n";
+            context.place = temp;
+        }
+        
         if (globalVars[this->id] == REAL)
         {
             string floatTemp = getFloatTemp();
@@ -669,13 +677,68 @@ void IdExpr::generateCode(CodeContext &context){
             string intTemp = getIntTemp();
             context.place = intTemp;
             context.code = "lw "+intTemp + ", " + to_string(codeGenerationVars[this->id]->offset) +"($sp)\n";
+        }else if(codeGenerationVars[this->id]->type->isArray){
+          string intTemp = getIntTemp();
+          context.code = "la "+ intTemp + to_string(codeGenerationVars[this->id]->offset) +"($sp)\n";
+          context.place = intTemp;
         }
     }
     
 }
 
+// a[2]
 void ArrayExpr::generateCode(CodeContext &context){
-    
+    CodeContext indexCode;
+    stringstream code;
+    this->index->generateCode(indexCode);
+    releaseRegister(indexCode.place);
+
+    string temp = getIntTemp();
+    string address = getIntTemp();
+    code<< indexCode.code <<endl
+    <<"li $a0, 4"<<endl
+    <<"mult $a0, "<<indexCode.place<<endl
+    <<"mflo "<< temp<< endl;
+
+    if (codeGenerationVars.find(this->id->id) == codeGenerationVars.end())
+    {
+        code <<"la "<<address<<", "<<this->id->id<<endl
+        <<"add "<<temp<<", "<<address<<", "<<temp<<endl;
+        releaseRegister(address);
+        if (globalVars[this->id->id] == INTEGER)
+        {
+            code<< "lw "<< temp<<", 0("<<temp<<")"<<endl;
+            context.place = temp;
+            context.type = new ComplexType(INTEGER, false);
+        }else{
+            string value = getFloatTemp();
+            code<< "l.s "<< value<<", 0("<<temp<<")"<<endl;
+            context.place = value;
+            context.type = new ComplexType(REAL, false);
+            releaseRegister(temp);
+        }
+    }else{
+        if(!codeGenerationVars[this->id->id]->isParameter){
+            code<<"la "<<address<<", "<<codeGenerationVars[this->id->id]->offset<<"($sp)"<<endl;
+        }else{
+            code<<"lw "<<address<<", "<<codeGenerationVars[this->id->id]->offset<<"($sp)"<<endl;
+        }
+
+        code<<"add "<<temp<<", "<<address<<", "<<temp<<endl;
+        if (codeGenerationVars[this->id->id]->type->primitiveType == INTEGER)
+        {
+            code<<"lw "<<temp<<", 0("<<temp<<")"<<endl;
+            context.place = temp;
+            context.type = codeGenerationVars[this->id->id]->type;
+        }else{
+            string value = getFloatTemp();
+            code<<"l.s "<<value<<", 0("<<temp<<")"<<endl;
+            context.place = value;
+            context.type = codeGenerationVars[this->id->id]->type;
+            releaseRegister(temp);
+        }
+    }
+    context.code = code.str();
 }
 
 void CharExpr::generateCode(CodeContext &context){
@@ -726,6 +789,41 @@ string intArithmetic(CodeContext &leftCode, CodeContext &rightCode, CodeContext 
     return code.str();
 }
 
+string floatArithmetic(CodeContext &leftCode, CodeContext &rightCode, CodeContext &resultCode, char op){
+    resultCode.place = getFloatTemp();
+    stringstream code;
+    switch (op)
+    {
+    case '+':
+        code<<"add.s "<<resultCode.place<<", "<< leftCode.place<<", "<<rightCode.place<<endl;
+        break;
+     case '-':
+        code<<"sub.s "<<resultCode.place<<", "<< leftCode.place<<", "<<rightCode.place<<endl;
+        break;
+    case '*':
+        code<<"mul.s "<<resultCode.place<<", "<< leftCode.place<<", "<<rightCode.place<<endl;
+        break;
+    case '/':
+        code<<"div.s "<<resultCode.place<<", "<< leftCode.place<<", "<<rightCode.place<<endl;
+        break;
+    default:
+        break;
+    }
+    return code.str();
+}
+
+void toReal(CodeContext &context){
+    string floatTemp = getFloatTemp();
+    stringstream code;
+    code << context.code
+    << "mtc1 "<<context.place<<", "<<floatTemp<<endl
+    << "cvt.s.w "<< floatTemp<<", "<<floatTemp<<endl;
+    releaseRegister(context.place);
+    context.place = floatTemp;
+    context.type = new ComplexType(REAL, false);
+    context.code = code.str();
+}
+
 #define GEN_ARIT_CODE_BINARY_EXPR(name, op)\
 void name##Expr::generateCode(CodeContext &context){\
     CodeContext leftCode, rightCode;\
@@ -740,6 +838,18 @@ void name##Expr::generateCode(CodeContext &context){\
         code<< leftCode.code<<endl\
         <<rightCode.code<<endl\
         << intArithmetic(leftCode, rightCode, context, op)<<endl;\
+    }\
+    else{\
+        context.type = new ComplexType(REAL, false);\
+        if(leftCode.type->primitiveType != REAL)\
+            toReal(leftCode);\
+        if(rightCode.type->primitiveType != REAL)\
+            toReal(rightCode);\
+        releaseRegister(leftCode.place);\
+        releaseRegister(rightCode.place);\
+        code<< leftCode.code<<endl\
+        <<rightCode.code<<endl\
+        << floatArithmetic(leftCode, rightCode, context, op)<<endl;\
     }\
     context.code = code.str();\
 }\
@@ -886,6 +996,28 @@ string AssignationStatement::generateCode(){
         {
             code<<"s.s "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
         }
+        else if(this->isArray){
+            CodeContext indexCode;
+            this->index->generateCode(indexCode);
+            releaseRegister(indexCode.place);
+            string temp = getIntTemp();
+            string address = getIntTemp();
+            code<<"li $a0, 4"<<endl
+            <<"mult $a0, "<<indexCode.place<<endl
+            <<"mflo "<< temp<<endl;
+            if (!codeGenerationVars[this->id]->isParameter)
+            {
+                code<<"la "<<address<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
+            }else{
+                code<<"lw "<<address<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
+            }
+            code<<"add "<<temp<<", "<<temp<<", "<<address<<endl;
+            code<<rightSideCode.code<<endl
+            <<"sw "<<rightSideCode.place<<", 0("<<temp<<")"<<endl;
+            releaseRegister(temp);
+            releaseRegister(address);
+            releaseRegister(indexCode.place);
+        }
     }
     releaseRegister(rightSideCode.place);
     return code.str();
@@ -930,12 +1062,21 @@ string VarDeclarationStatement::generateCode(){
     list<string>::iterator idIt = this->ids->begin();
     while (idIt != this->ids->end())
     {
+        codeGenerationVars[(*idIt)] = new CodeGenerationVarInfo(false, this->type, globalStackPointer);
         if (!this->type->isArray)
         {
-            codeGenerationVars[(*idIt)] = new CodeGenerationVarInfo(false, this->type, globalStackPointer);
             globalStackPointer+=4;
+        }else{
+            ArrayType * arrayType = ((ArrayType *)this->type);
+            int size = 0;
+            if (arrayType->start > 1)
+            {
+                size = arrayType->end - arrayType->start;
+            }else{
+                size = arrayType->end;
+            }
+            globalStackPointer += size * 4;
         }
-        
         idIt++;
     }
     return "";

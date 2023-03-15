@@ -1,6 +1,7 @@
 program whileLoop;
 var
    a: integer;
+   b: real;
 
 begin
    a := 10;
@@ -8,6 +9,8 @@ begin
    
    begin
       writeln('value of a: ', a);
+      b:= a + 5.5;
+      writeln('value of b: ', b);
       a := a + 1;
    end;
 end.
