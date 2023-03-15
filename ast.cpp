@@ -960,7 +960,6 @@ string ReadStatement::generateCode(){
         it++;
     }
     
-    cout<<" this is read code: "<< code.str()<<endl; 
     return code.str();
 }
 
@@ -988,21 +987,14 @@ string AssignationStatement::generateCode(){
             code<<"s.s "<<rightSideCode.place<<", "<<this->id<<endl;
         }
     }else{
-         if (rightSideCode.type->primitiveType == INTEGER && !rightSideCode.type->isArray)
-        {
-            code<<"sw "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
-        }
-        else if (rightSideCode.type->primitiveType == REAL && !rightSideCode.type->isArray)
-        {
-            code<<"s.s "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
-        }
-        else if(this->isArray){
+        if(this->isArray){
             CodeContext indexCode;
             this->index->generateCode(indexCode);
-            releaseRegister(indexCode.place);
             string temp = getIntTemp();
             string address = getIntTemp();
-            code<<"li $a0, 4"<<endl
+            releaseRegister(indexCode.place);
+            code<< indexCode.code <<endl
+            <<"li $a0, 4"<<endl
             <<"mult $a0, "<<indexCode.place<<endl
             <<"mflo "<< temp<<endl;
             if (!codeGenerationVars[this->id]->isParameter)
@@ -1017,6 +1009,14 @@ string AssignationStatement::generateCode(){
             releaseRegister(temp);
             releaseRegister(address);
             releaseRegister(indexCode.place);
+        }
+        else if (rightSideCode.type->primitiveType == INTEGER)
+        {
+            code<<"sw "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
+        }
+        else if (rightSideCode.type->primitiveType == REAL)
+        {
+            code<<"s.s "<<rightSideCode.place<<", "<<codeGenerationVars[this->id]->offset<<"($sp)"<<endl;
         }
     }
     releaseRegister(rightSideCode.place);
@@ -1034,7 +1034,7 @@ string WhileStatement::generateCode(){
     << exprCode.code << endl;
     if (exprCode.type->primitiveType == INTEGER)
     {
-        code<<"beqz "<<exprCode.place<<", "<<endWhile;
+        code<<"beqz "<<exprCode.place<<", "<<endWhile<<endl;
     }else{
         code<<"bc1f "<<endWhile<<endl;
     }
