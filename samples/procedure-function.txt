@@ -8,7 +8,6 @@ begin
       m:= x;
    else
       m:= y;
-writeln('m=',m);
 end; { 
    
    end of procedure findMin

@@ -676,6 +676,7 @@ void FloatExpr::generateCode(CodeContext &context){
 void IdExpr::generateCode(CodeContext &context){
     if (codeGenerationVars.find(this->id) == codeGenerationVars.end())
     {
+        context.globalVarName = this->id;
         context.type = globalVars[this->id];
         if (globalVars[this->id]->isArray)
         {
@@ -787,7 +788,46 @@ void UnaryExpr::generateCode(CodeContext &context){
 }
 
 void MethodInvocationExpr::generateCode(CodeContext &context){
+    list<Expression*>::iterator it = this->args->begin();
+    list<CodeContext> codes;
+    stringstream code;
+    CodeContext argCode;
+    while (it != this->args->end())
+    {
+        (*it)->generateCode(argCode);
+        code<<argCode.code <<endl;
+        codes.push_back(argCode);
+        it++;
+    }
+
+    int i = 0;
+    list<CodeContext>::iterator codeIt = codes.begin();
+    while (codeIt != codes.end())
+    {
+        releaseRegister((*codeIt).place);
+        if ((*codeIt).type->primitiveType == INTEGER)
+        {
+            code << "move $a"<<i<<", "<<(*codeIt).place<<endl;
+        }else{
+            code << "mfc1 $a"<<i<<", "<<(*codeIt).place<<endl;
+        }
+        i++;
+        codeIt++;
+    }
     
+    code <<"jal "<<this->id->id<<endl;
+    string result;
+    if (methods[this->id->id]->returnType->primitiveType == REAL)
+    {
+        result = getFloatTemp();
+        code<<"mtc1 $v0, "<<result<<endl;
+    }else if(methods[this->id->id]->returnType->primitiveType == INTEGER){
+        result = getIntTemp();
+        code<<"move "<<result<<", $v0"<<endl;
+    }
+    context.code = code.str();
+    context.place = result;
+    context.type = methods[this->id->id]->returnType;
 }
 
 #define GEN_CODE_BINARY_EXPR(name)\
@@ -971,11 +1011,20 @@ string ReadStatement::generateCode(){
             code<<"li $v0, 5"<<endl
             <<"syscall"<<endl
             << "move "<<exprContext.place<<", $v0"<<endl;
+            if (exprContext.globalVarName != "")
+            {
+                code<<"sw "<<exprContext.place<<", "<<exprContext.globalVarName<<endl;
+            }
+            
         }else if (exprContext.type->primitiveType == REAL)
         {   
             code<<"li $v0, 6"<<endl
             <<"syscall"<<endl
             << "mov.s "<<exprContext.place<<", $f0";
+            if (exprContext.globalVarName != "")
+            {
+                code<<"s.s "<<exprContext.place<<", "<<exprContext.globalVarName<<endl;
+            }
         }else if(exprContext.type->primitiveType == STRING){
            /*
             TODOOOO.
@@ -1031,7 +1080,10 @@ string IfStatement::generateCode(){
 }
 
 string ExpressionStatement::generateCode(){
-    return "";
+    CodeContext exprCode;
+    this->expr->generateCode(exprCode);
+    releaseRegister(exprCode.place);
+    return exprCode.code;
 }
 
 string AssignationStatement::generateCode(){
@@ -1210,7 +1262,7 @@ string ProcedureDeclarationStatement::generateCode(){
     stringstream code;
     code<< this->id<<": "<<endl;
     string state = saveState();
-
+    code<<state<<endl;
     if (this->varDeclaration->ids->size() > 0)
     {
         list<string>::iterator paramsIt = this->varDeclaration->ids->begin();

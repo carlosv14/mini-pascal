@@ -6,4 +6,5 @@ typedef struct{
     string code;
     string place;
     ComplexType * type;
+    string globalVarName;
 }CodeContext;
