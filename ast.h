@@ -16,13 +16,29 @@ class Node{
         virtual void print() = 0;
 };
 
+class Statement : public Node{
+    public:
+        Statement(int line, int column) : Node(line, column){}
+        virtual void print() = 0;
+        virtual void evaluateSemantic() = 0;
+        virtual string generateCode() = 0;
+};
+
+class DeclarationStatement : public Statement{
+    public:
+        DeclarationStatement(int line, int column) : Statement(line, column){}
+        virtual void print() = 0;
+        virtual void evaluateSemantic() = 0;
+        virtual string generateCode() = 0;
+};
+
 class Expression : public Node{
     public:
         Expression(int line, int column) : Node(line, column){
 
         }
         virtual void print() = 0;
-        virtual PrimitiveType getType() = 0;
+        virtual ComplexType* getType() = 0;
         virtual void generateCode(CodeContext &context) = 0;
 };
 
@@ -35,7 +51,7 @@ class IdExpr : public Expression{
         }
         string id;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -52,7 +68,7 @@ class ArrayExpr : public Expression{
         IdExpr * id;
         Expression * index;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -63,7 +79,7 @@ class StringExpr : public Expression{
         }
         string value;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -74,7 +90,7 @@ class CharExpr : public Expression{
         }
         char value;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -85,7 +101,7 @@ class FloatExpr : public Expression{
         }
         float value;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -96,7 +112,7 @@ class IntExpr : public Expression{
         }
         int value;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -107,7 +123,7 @@ class BoolExpr : public Expression{
         }
         bool value;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -121,7 +137,7 @@ class UnaryExpr : public Expression{
         UnaryOperator op;
         Expression * expr;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
 };
 
@@ -135,7 +151,7 @@ class BinaryExpr : public Expression{
         Expression * left;
         Expression * right;
         virtual void print() = 0;
-        virtual PrimitiveType getType() = 0;
+        virtual ComplexType* getType() = 0;
         virtual void generateCode(CodeContext &context) = 0;
 };
 
@@ -144,18 +160,10 @@ class name##Expr : public BinaryExpr{\
     public: \
         name##Expr(Expression * left, Expression * right, int line, int column): BinaryExpr(left, right, line, column){}\
         void print();\
-        PrimitiveType getType();\
+        ComplexType* getType();\
         void generateCode(CodeContext &context);\
 };
 
-
-class Statement : public Node{
-    public:
-        Statement(int line, int column) : Node(line, column){}
-        virtual void print() = 0;
-        virtual void evaluateSemantic() = 0;
-        virtual string generateCode() = 0;
-};
 
 class WriteStatement : public Statement{
     public:
@@ -208,7 +216,7 @@ class MethodInvocationExpr : public Expression{
         IdExpr * id;
         list<Expression *> * args;
         void print();
-        PrimitiveType getType();
+        ComplexType* getType();
         void generateCode(CodeContext &context);
         string generatCode();
 };
@@ -277,25 +285,20 @@ class ForStatement: public Statement{
 
 class MainStatement: public Statement{
     public:
-        MainStatement(string id, Statement * stmt, int line, int column) : 
+        MainStatement(string id, list<DeclarationStatement *> * declarations, list<Statement * > * stmts, int line, int column) : 
             Statement(line, column){
             this->id = id;
-            this->stmt = stmt;
+            this->stmts = stmts;
+            this->declarations = declarations;
         }
         string id;
-        Statement * stmt;
+        list<DeclarationStatement *> * declarations;
+        list<Statement * > * stmts;
         void print();
         void evaluateSemantic();
         string generateCode();
 };
 
-class DeclarationStatement : public Statement{
-    public:
-        DeclarationStatement(int line, int column) : Statement(line, column){}
-        virtual void print() = 0;
-        virtual void evaluateSemantic() = 0;
-        virtual string generateCode() = 0;
-};
 
 class VarDeclarationStatement : public DeclarationStatement{
     public:
@@ -378,9 +381,9 @@ class BlockStatement: public Statement{
 
 class MethodInformation{
     public:
-        PrimitiveType returnType;
+        ComplexType * returnType;
         VarDeclarationStatement * parameters;
-        MethodInformation(PrimitiveType returnType, VarDeclarationStatement * parameters){
+        MethodInformation(ComplexType * returnType, VarDeclarationStatement * parameters){
             this->returnType = returnType;
             this->parameters = parameters;
         }

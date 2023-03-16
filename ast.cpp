@@ -105,7 +105,6 @@ void ForStatement::print(){
 
 void MainStatement::print(){
     cout<<"Main statement "<<this->id<<" line: "<<this->line << " column : "<<this->column<<endl;
-    this->stmt->print();
 }
 
 void BlockStatement::print(){
@@ -152,29 +151,29 @@ void FunctionDeclarationStatement::print(){
 
 /* Expression Get Type*/
 
-PrimitiveType StringExpr::getType(){
-    return STRING;
+ComplexType * StringExpr::getType(){
+    return new ComplexType(STRING, false);
 }
 
-PrimitiveType CharExpr::getType(){
-    return CHAR;
+ComplexType * CharExpr::getType(){
+    return new ComplexType(CHAR, false);
 }
 
-PrimitiveType FloatExpr::getType(){
-    return REAL;
+ComplexType * FloatExpr::getType(){
+    return new ComplexType(REAL, false);
 }
 
-PrimitiveType IntExpr::getType(){
-    return INTEGER;
+ComplexType * IntExpr::getType(){
+    return new ComplexType(INTEGER, false);
 }
 
-PrimitiveType BoolExpr::getType(){
-    return BOOLEAN;
+ComplexType * BoolExpr::getType(){
+    return new ComplexType(BOOLEAN, false);
 }
 
-PrimitiveType UnaryExpr::getType(){
-    PrimitiveType type = this->expr->getType();
-    if (this->op == NOT && type != BOOLEAN)
+ComplexType * UnaryExpr::getType(){
+    ComplexType * type = this->expr->getType();
+    if (this->op == NOT && type->primitiveType != BOOLEAN)
     {
         cerr<<"No se puede aplicar el operador NOT a una expresion no booleana"<<endl;
     }
@@ -193,53 +192,70 @@ map<string, PrimitiveType> exprResultTypes = {
     {"BOOLEAN,BOOLEAN", BOOLEAN},
 };
 
-string getTypeAsString(PrimitiveType type){
-    if (type == STRING)
+string getTypeAsString(ComplexType * type){
+    if (type->isArray)
+    {
+        if (type->primitiveType == STRING)
+        {
+            return "STRING_ARRAY";
+        }else if(type->primitiveType == CHAR){
+            return "CHAR_ARRAY";
+        }else if(type->primitiveType == BOOLEAN){
+            return "BOOLEAN_ARRAY";
+        }else if(type->primitiveType == INTEGER){
+            return "INTEGER_ARRAY";
+        }
+        else if(type->primitiveType == REAL){
+            return "REAL_ARRAY";
+        }
+    }
+    
+    if (type->primitiveType == STRING)
     {
         return "STRING";
-    }else if(type == CHAR){
+    }else if(type->primitiveType == CHAR){
         return "CHAR";
-    }else if(type == BOOLEAN){
+    }else if(type->primitiveType == BOOLEAN){
         return "BOOLEAN";
-    }else if(type == INTEGER){
+    }else if(type->primitiveType == INTEGER){
         return "INTEGER";
     }
-    else if(type == REAL){
+    else if(type->primitiveType == REAL){
         return "REAL";
     }
     return "NONE";
 }
 
 #define GET_TYPE_BINARY_EXPR(name)\
-PrimitiveType name##Expr::getType(){\
+ComplexType * name##Expr::getType(){\
     string leftType = getTypeAsString(this->left->getType());\
     string rightType = getTypeAsString(this->right->getType());\
     PrimitiveType type = exprResultTypes[leftType+","+rightType];\
     if(type == 0){\
         cerr<<"El tipo de dato "<<leftType<<" no puede ser operado con el tipo de dato "<<rightType<<" linea: "<<this->line<<" columna: "<<this->column<<endl;\
     }\
-    return type;\
+    return new ComplexType(type, this->left->getType()->isArray || this->right->getType()->isArray);\
 }\
 
 #define GET_TYPE_BINARY_EXPR_BOOL(name)\
-PrimitiveType name##Expr::getType(){\
+ComplexType * name##Expr::getType(){\
     string leftType = getTypeAsString(this->left->getType());\
     string rightType = getTypeAsString(this->right->getType());\
     if(leftType != rightType){\
         cerr<<"El tipo de dato "<<leftType<<" no puede ser operado con el tipo de dato "<<rightType<<" linea: "<<this->line<<" columna: "<<this->column<<endl;\
     }\
-    return BOOLEAN;\
+    return new ComplexType(BOOLEAN, false);\
 }\
 
 
 class Context{
     public:
         struct Context * prev;
-        map<string, PrimitiveType> vars;
+        map<string, ComplexType *> vars;
 };
 
-map<string, PrimitiveType> vars;
-map<string, PrimitiveType> globalVars;
+map<string, ComplexType *> vars;
+map<string, ComplexType *> globalVars;
 Context * currentContext = NULL;
 
 void pushContext(){
@@ -259,60 +275,60 @@ void popContext(){
     }
 }
 
-PrimitiveType getLocalVarType(string id){
+ComplexType * getLocalVarType(string id){
     Context * context = currentContext;
     while (context  != NULL)
     {
-        if (context->vars[id] != 0)
+        if (context->vars[id] != NULL)
         {
             return context->vars[id];
         }
         context = context->prev;
     }
-    return NONE;
+    return new ComplexType(NONE, false);
 }
 
-PrimitiveType getVarType(string id){
-    PrimitiveType resultType = NONE;
+ComplexType * getVarType(string id){
+    ComplexType * resultType = new ComplexType(NONE, false);
     if (currentContext != NULL)
     {
         resultType = getLocalVarType(id);
     }
-    if (resultType != NONE)
+    if (resultType->primitiveType != NONE)
     {
         return resultType;
     }
-    return globalVars[id] != 0 ? globalVars[id] : NONE;
+    return globalVars[id] != 0 ? globalVars[id] : resultType;
 }
 
-PrimitiveType MethodInvocationExpr::getType(){
+ComplexType * MethodInvocationExpr::getType(){
     MethodInformation * method = methods[this->id->id];
     if (method == NULL)
     {
         cerr<<this->id->id<<" no declarado linea: "<<this->line<<" column "<<this->column<<endl;
-        return NONE;
+        return new ComplexType(NONE, false);
     }
     
     if (method->parameters->ids->size() > this->args->size())
     {
         cerr<<"Muy pocos argumentos para el método: "<<this->id->id <<" linea: "<<this->line<<" column "<<this->column<<endl;
-        return NONE;
+        return new ComplexType(NONE, false);
     }
     
     if (method->parameters->ids->size() < this->args->size())
     {
         cerr<<"Muchos argumentos para el método: "<<this->id->id <<" linea: "<<this->line<<" column "<<this->column<<endl;
-        return NONE;
+        return new ComplexType(NONE, false);
     }
 
     ComplexType * paramsType = method->parameters->type;
     list<Expression*>::iterator argsIt = this->args->begin();
     while (argsIt != this->args->end())
     {
-        if ((*argsIt)->getType() != paramsType->primitiveType)
+        if ((*argsIt)->getType()->primitiveType != paramsType->primitiveType)
         {   
-            cerr<<"Tipo de dato incorrecto en parámetros, se esperaba tipo: "<<getTypeAsString(paramsType->primitiveType)<<" se obtuvo: "<< getTypeAsString((*argsIt)->getType()) <<" linea: "<<this->line<<" column "<<this->column<<endl;
-            return NONE;
+            cerr<<"Tipo de dato incorrecto en parámetros, se esperaba tipo: "<<getTypeAsString(paramsType)<<" se obtuvo: "<< getTypeAsString((*argsIt)->getType()) <<" linea: "<<this->line<<" column "<<this->column<<endl;
+            return new ComplexType(NONE, false);
         }
         argsIt++;
     }
@@ -320,9 +336,9 @@ PrimitiveType MethodInvocationExpr::getType(){
     return method->returnType;
 }
 
-PrimitiveType IdExpr::getType(){
-    PrimitiveType type = getVarType(this->id);
-    if (type == NONE)
+ComplexType * IdExpr::getType(){
+    ComplexType * type = getVarType(this->id);
+    if (type->primitiveType == NONE)
     {
         cerr<<this->id<<" no declarada linea: "<<this->line<<" column "<<this->column<<endl;
     }
@@ -330,7 +346,7 @@ PrimitiveType IdExpr::getType(){
     return type;
 }
 
-PrimitiveType ArrayExpr::getType(){
+ComplexType * ArrayExpr::getType(){
     return this->id->getType();
 }
 
@@ -370,7 +386,7 @@ void WriteStatement::evaluateSemantic(){
     list<Expression *>::iterator it = this->expressions->begin();
     while (it != this->expressions->end())
     {
-        PrimitiveType type = (*it)->getType();
+        PrimitiveType type = (*it)->getType()->primitiveType;
         if(type != STRING && type != INTEGER && type != CHAR && type != REAL){
             cerr<<"No se permite imprimir tipos distintos de string, integer, char y real linea:"<<this->line <<" columna: "<<this->column<<endl;
             return;
@@ -383,7 +399,7 @@ void ReadStatement::evaluateSemantic(){
     list<Expression *>::iterator it = this->expressions->begin();
     while (it != this->expressions->end())
     {
-        PrimitiveType type = (*it)->getType();
+        PrimitiveType type = (*it)->getType()->primitiveType;
         if(type != STRING && type != INTEGER && type != CHAR && type != REAL && type != BOOLEAN){
             cerr<<"No se permite leer tipos distintos de string, integer, char, booleano y real linea:"<<this->line <<" columna: "<<this->column<<endl;
             return;
@@ -393,7 +409,7 @@ void ReadStatement::evaluateSemantic(){
 }
 
 void IfStatement::evaluateSemantic(){
-    if (this->expression->getType() != BOOLEAN)
+    if (this->expression->getType()->primitiveType != BOOLEAN)
     {
         cerr<<"El if requiere una expresion booleana linea: "<< this->line <<" columna "<<this->column<<endl;
         return;
@@ -412,15 +428,15 @@ void ExpressionStatement::evaluateSemantic(){
 }
 
 void AssignationStatement::evaluateSemantic(){
-    if (this->isArray && this->index->getType() != INTEGER)
+    if (this->isArray && this->index->getType()->primitiveType != INTEGER)
     {
         cerr<<"El indice en el arreglo debe ser un entero linea: "<<this->line<<" columna: "<<this->column<<endl;
         return;
     }
     
-    PrimitiveType varType = getVarType(this->id);
-    PrimitiveType exprType = this->expr->getType();
-    if (varType != exprType)
+    ComplexType * varType = getVarType(this->id);
+    ComplexType * exprType = this->expr->getType();
+    if (varType->primitiveType != exprType->primitiveType)
     {
         cerr<<"No se puede assignar "<< getTypeAsString(exprType)<< " a la variable de tipo "<<getTypeAsString(varType)<<" linea " <<this->line<<" columna: "<<this->column<<endl;
         return;
@@ -429,7 +445,7 @@ void AssignationStatement::evaluateSemantic(){
 
 
 void WhileStatement::evaluateSemantic(){
-    if (this->expression->getType() != BOOLEAN)
+    if (this->expression->getType()->primitiveType != BOOLEAN)
     {
         cerr<<"El while requiere una expresion booleana linea: "<< this->line <<" columna "<<this->column<<endl;
         return;
@@ -440,16 +456,16 @@ void WhileStatement::evaluateSemantic(){
 }
 
 void ForStatement::evaluateSemantic(){    
-    PrimitiveType varType = getVarType(this->id);
-    PrimitiveType fromExprType = this->fromExpr->getType();
-    PrimitiveType toExprType = this->toExpr->getType();
-    if (varType != fromExprType)
+    ComplexType * varType = getVarType(this->id);
+    ComplexType * fromExprType = this->fromExpr->getType();
+    ComplexType * toExprType = this->toExpr->getType();
+    if (varType->primitiveType != fromExprType->primitiveType)
     {
         cerr<<"No se puede assignar "<< getTypeAsString(fromExprType)<< " a la variable de tipo "<<getTypeAsString(varType) << " linea " <<this->line<<" columna: "<<this->column<<endl;
         return;
     }
 
-      if (varType != toExprType)
+    if (varType->primitiveType != toExprType->primitiveType)
     {
         cerr<<"No se puede assignar "<< getTypeAsString(toExprType)<< " a la variable de tipo "<<getTypeAsString(varType) << " linea " <<this->line<<" columna: "<<this->column<<endl;
         return;
@@ -461,14 +477,27 @@ void ForStatement::evaluateSemantic(){
 }
 
 void MainStatement::evaluateSemantic(){
-    this->stmt->evaluateSemantic();
+    pushContext();
+    list<DeclarationStatement *>::iterator itDec = this->declarations->begin();
+    while (itDec != this->declarations->end())
+    {
+        (*itDec)->evaluateSemantic();
+        itDec++;
+    }
+    list<Statement *>::iterator itStmt = this->stmts->begin();
+    while (itStmt != this->stmts->end())
+    {
+        (*itStmt)->evaluateSemantic();
+        itStmt++;
+    }
+    popContext();
 }
 
 void VarDeclarationStatement::evaluateSemantic(){
    list<string>::iterator it = this->ids->begin();
    while (it != this->ids->end())
    {
-        if (getVarType(*it) != NONE)
+        if (getVarType(*it)->primitiveType != NONE)
         {
             cerr<<"Ya existe una variable con el nombre "<< (*it)<<" linea " <<this->line<<" columna: "<<this->column<<endl;
             return;
@@ -480,13 +509,13 @@ void VarDeclarationStatement::evaluateSemantic(){
             return;
         }
         
-        currentContext->vars[(*it)] = this->type->primitiveType;        
+        currentContext->vars[(*it)] = this->type;        
         it++;
    }
 }
 
 void ConstDeclarationStatement::evaluateSemantic(){
-    if (getVarType(this->id) != NONE)
+    if (getVarType(this->id)->primitiveType != NONE)
     {
         cerr<<"Ya existe una variable con el nombre "<< (this->id)<<" linea " <<this->line<<" columna: "<<this->column<<endl;
         return;
@@ -498,7 +527,7 @@ void ConstDeclarationStatement::evaluateSemantic(){
         return;
    }
    
-   currentContext->vars[this->id] = this->type->primitiveType;
+   currentContext->vars[this->id] = this->type;
 }
 
 void ProcedureDeclarationStatement::evaluateSemantic(){
@@ -511,7 +540,7 @@ void ProcedureDeclarationStatement::evaluateSemantic(){
         cerr<<"Ya existe un método con el nombre"<<this->id<<" linea "<<this->line<<" columna "<<this->column<<endl;
         return;
     }
-    methods[this->id] = new MethodInformation(VOID, this->varDeclaration);
+    methods[this->id] = new MethodInformation(new ComplexType(VOID, false), this->varDeclaration);
     pushContext();
     this->varDeclaration->evaluateSemantic();
     this->statement->evaluateSemantic();
@@ -529,7 +558,7 @@ void FunctionDeclarationStatement::evaluateSemantic(){
         return;
     }
 
-    methods[this->id] = new MethodInformation(this->type->primitiveType, this->varDeclaration);
+    methods[this->id] = new MethodInformation(this->type, this->varDeclaration);
     pushContext();
     this->varDeclaration->evaluateSemantic();
     this->statement->evaluateSemantic();
@@ -647,20 +676,19 @@ void FloatExpr::generateCode(CodeContext &context){
 void IdExpr::generateCode(CodeContext &context){
     if (codeGenerationVars.find(this->id) == codeGenerationVars.end())
     {
-        context.type = new ComplexType(globalVars[this->id], false);
-        if (globalVars[this->id] == NONE)
+        context.type = globalVars[this->id];
+        if (globalVars[this->id]->isArray)
         {
             string temp = getIntTemp();
             context.code = "la " + temp +", "+ this->id + "\n";
             context.place = temp;
         }
-        
-        if (globalVars[this->id] == REAL)
+        if (globalVars[this->id]->primitiveType == REAL)
         {
             string floatTemp = getFloatTemp();
             context.place = floatTemp;
             context.code = "l.s "+floatTemp + ", " + this->id +"\n";
-        }else if (globalVars[this->id] == INTEGER){
+        }else if (globalVars[this->id]->primitiveType == INTEGER){
             string intTemp = getIntTemp();
             context.place = intTemp;
             context.code = "lw "+intTemp + ", " + this->id +"\n";
@@ -705,7 +733,7 @@ void ArrayExpr::generateCode(CodeContext &context){
         code <<"la "<<address<<", "<<this->id->id<<endl
         <<"add "<<temp<<", "<<address<<", "<<temp<<endl;
         releaseRegister(address);
-        if (globalVars[this->id->id] == INTEGER)
+        if (globalVars[this->id->id]->primitiveType == INTEGER)
         {
             code<< "lw "<< temp<<", 0("<<temp<<")"<<endl;
             context.place = temp;
@@ -942,7 +970,7 @@ string ReadStatement::generateCode(){
         {
             code<<"li $v0, 5"<<endl
             <<"syscall"<<endl
-            << "move "<<exprContext.place<<", $v0";
+            << "move "<<exprContext.place<<", $v0"<<endl;
         }else if (exprContext.type->primitiveType == REAL)
         {   
             code<<"li $v0, 6"<<endl
@@ -964,7 +992,42 @@ string ReadStatement::generateCode(){
 }
 
 string IfStatement::generateCode(){
-    return "";
+    string ifLabel = newLabel("if");
+    string elseLabel = "";
+    if (this->falseStatement != NULL)
+    {
+        elseLabel = newLabel("else");
+    }
+    
+    string endifLabel = newLabel("endif");
+    stringstream code;
+    CodeContext exprContext;
+    this->expression->generateCode(exprContext);
+    releaseRegister(exprContext.place);
+    code<<ifLabel<<": "<<endl
+    << exprContext.code <<endl;
+    if (elseLabel != "")
+    {
+        if (exprContext.type->primitiveType == INTEGER)
+        {
+            code<<"beqz "<<exprContext.place<<", "<<elseLabel<<endl;
+        }else{
+            code<<"bc1f "<<elseLabel<<endl;
+        }
+    }else{
+         if (exprContext.type->primitiveType == INTEGER)
+        {
+            code<<"beqz "<<exprContext.place<<", "<<endifLabel<<endl;
+        }else{
+            code<<"bc1f "<<endifLabel<<endl;
+        }
+    }
+    
+    code<<this->trueStatement->generateCode()<<endl
+    <<"j "<<endifLabel<<endl
+    <<elseLabel<<": "<< this->falseStatement->generateCode()<<endl
+    <<endifLabel<<": "<<endl;
+    return code.str();
 }
 
 string ExpressionStatement::generateCode(){
@@ -1051,9 +1114,46 @@ string ForStatement::generateCode(){
 
 string MainStatement::generateCode(){
     stringstream code;
+    CodeContext litCode;
+    stringstream literals;
+    list<DeclarationStatement*>::iterator declIt = this->declarations->begin();
+    while (declIt != this->declarations->end())
+    {
+        VarDeclarationStatement * varDeclaration = dynamic_cast<VarDeclarationStatement *>(*declIt);
+        ConstDeclarationStatement * constDeclaration = dynamic_cast<ConstDeclarationStatement *>(*declIt);
+        if (varDeclaration)
+        {
+            list<string>::iterator varIt = varDeclaration->ids->begin();
+            while (varIt != varDeclaration->ids->end())
+            {
+                assemblyResult.data += (*varIt) + ": .word 0\n";
+                globalVars[(*varIt)] = varDeclaration->type;
+                varIt++;
+            }
+        }else if(constDeclaration){
+            assemblyResult.data += constDeclaration->id +": .word 0\n";
+            globalVars[constDeclaration->id] = constDeclaration->type;
+            constDeclaration->literal->generateCode(litCode);
+            releaseRegister(litCode.place);
+            literals<<litCode.code<<endl
+            <<"sw "<<litCode.place<<", "<<constDeclaration->id<<endl;
+        }else{
+            code<<(*declIt)->generateCode();
+        }
+
+        declIt++;
+    }
+
     code<<"main: "<<endl
-    <<this->stmt->generateCode()<<endl
-    <<"li $v0, 10"<<endl
+    <<literals.str()<<endl;
+    list<Statement *>::iterator it = this->stmts->begin();
+    while (it != this->stmts->end())
+    {
+        code<<(*it)->generateCode();
+        it++;
+    }
+    
+    code<<"li $v0, 10"<<endl
     <<"syscall"<<endl;
     return code.str();
 }
@@ -1086,8 +1186,53 @@ string ConstDeclarationStatement::generateCode(){
     return "";
 }
 
+string saveState(){
+    stringstream code;
+    code<<"sw $ra, "<<globalStackPointer<<"($sp)"<<endl;
+    globalStackPointer+=4;
+    return code.str();
+}
+
+string retrieveState(string state){
+    string::size_type n = 0;
+    string originalStateStatement = "sw";
+    while ((n = state.find(originalStateStatement, n)) != string::npos)
+    {
+        state.replace(n, originalStateStatement.size(), "lw");
+        n+= originalStateStatement.size();
+    }
+    return state;
+}
+
 string ProcedureDeclarationStatement::generateCode(){
-    return "";
+    int stackPointer = 4;
+    globalStackPointer = 0;
+    stringstream code;
+    code<< this->id<<": "<<endl;
+    string state = saveState();
+
+    if (this->varDeclaration->ids->size() > 0)
+    {
+        list<string>::iterator paramsIt = this->varDeclaration->ids->begin();
+        for (int i = 0; i < this->varDeclaration->ids->size(); i++)
+        {
+            code<<"sw $a"<<i<<", "<<stackPointer<<"($sp)"<<endl;
+            codeGenerationVars[(*paramsIt)] = new CodeGenerationVarInfo(true, this->varDeclaration->type, stackPointer);
+            stackPointer += 4;
+            globalStackPointer +=4;
+            paramsIt++;
+        }
+    }
+    code<<this->statement->generateCode()<<endl;
+    stringstream stackPointerCode;
+    stackPointerCode<<endl<<"addiu $sp, $sp, -"<<globalStackPointer<<endl;
+    code<<retrieveState(state)<<endl
+    <<"addiu $sp, $sp, "<<globalStackPointer<<endl
+    <<"jr $ra"<<endl;
+    //codeGenerationVars.clear();
+    string finalCode = code.str();
+    finalCode.insert(this->id.size() + 2, stackPointerCode.str());
+    return finalCode;
 }
 
 string FunctionDeclarationStatement::generateCode(){
@@ -1102,7 +1247,6 @@ string BlockStatement::generateCode(){
         code<<(*declIt)->generateCode();
         declIt++;
     }
-    
 
     list<Statement *>::iterator it = this->stmts->begin();
     while (it != this->stmts->end())

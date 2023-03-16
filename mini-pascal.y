@@ -73,8 +73,11 @@
 %%
 
 program: KW_PROGRAM TK_ID ';'
-            block_statement
-           '.' { $$ = new MainStatement($2, $4, line, column); $$->evaluateSemantic();
+            declarations
+            KW_BEGIN
+            statement_list
+            KW_END
+           '.' { $$ = new MainStatement($2, $4, $6, line, column); $$->evaluateSemantic();
                 string code = $$->generateCode();
                 assemblyResult.code += code;
                 writeFile("result.asm");

@@ -1,59 +1,47 @@
 .data
-	string_2: .asciiz "a="
-string_5: .asciiz "Element["
-string_6: .asciiz "] = "
+	a: .word 0
+c: .word 0
+d: .word 0
+m: .word 0
+string_3: .asciiz "yo"
+string_4: .asciiz "m="
+string_5: .asciiz " Enter three numbers: "
+string_6: .asciiz " Minimum: "
 
 	nextline: .asciiz "\n"
 .text	
 .globl main
-	main: 
-li $t0, 1
-sw $t0, 40($sp)
-li $t0, 1
-sw $t0, 44($sp)
-while_0: 
-lw $t0, 44($sp)
+	findMin: 
+addiu $sp, $sp, -12
 
-li $t1, 10
+sw $a0, 4($sp)
+sw $a1, 8($sp)
+if_0: 
+lw $t0, 4($sp)
+
+lw $t1, 8($sp)
 
 slt $t0, $t0, $t1
 
-beqz $t0, endWhile_1
-lw $t0, 40($sp)
+beqz $t0, else_1
 
-li $t1, 100
-
-add $t0, $t0, $t1
-
-lw $t1, 40($sp)
-
-li $a0, 4
-mult $a0, $t1
-mflo $t2
-la $t3, 0($sp)
-add $t2, $t2, $t3
-lw $t0, 40($sp)
-
-li $t1, 100
-
-add $t0, $t0, $t1
-
-
-sw $t0, 0($t2)
-lw $t0, 40($sp)
-
-li $a0, 4
-mult $a0, $t0
-mflo $t0
-la $t1, 0($sp)
-add $t0, $t1, $t0
-lw $t0, 0($t0)
-sw $t0, 48($sp)
-
-la $a0, string_2
+la $a0, string_3
 li $v0, 4
 syscall
-lw $t0, 48($sp)
+la $a0, nextline
+li $v0, 4
+syscall
+
+j endif_2
+else_1: lw $t0, 8($sp)
+sw $t0, m
+
+endif_2: 
+
+la $a0, string_4
+li $v0, 4
+syscall
+lw $t0, m
 
 move $a0, $t0
 li $v0, 1
@@ -61,54 +49,40 @@ syscall
 la $a0, nextline
 li $v0, 4
 syscall
-lw $t0, 44($sp)
 
-li $t2, 1
+lw $ra, 0($sp)
 
-add $t0, $t0, $t2
+addiu $sp, $sp, 12
+jr $ra
+main: 
 
-sw $t0, 44($sp)
-lw $t0, 40($sp)
-
-li $t2, 1
-
-add $t0, $t0, $t2
-
-sw $t0, 40($sp)
-
-j while_0
-endWhile_1: 
-li $t0, 1
-sw $t0, 44($sp)
-while_3: 
-lw $t0, 44($sp)
-
-li $t2, 10
-
-slt $t0, $t0, $t2
-
-beqz $t0, endWhile_4
 
 la $a0, string_5
 li $v0, 4
 syscall
-lw $t0, 44($sp)
-
-move $a0, $t0
-li $v0, 1
+la $a0, nextline
+li $v0, 4
 syscall
+lw $t0, a
+
+li $v0, 5
+syscall
+move $t0, $v0
+lw $t0, c
+
+li $v0, 5
+syscall
+move $t0, $v0
+lw $t0, d
+
+li $v0, 5
+syscall
+move $t0, $v0
 
 la $a0, string_6
 li $v0, 4
 syscall
-lw $t0, 44($sp)
-
-li $a0, 4
-mult $a0, $t0
-mflo $t0
-la $t2, 0($sp)
-add $t0, $t2, $t0
-lw $t0, 0($t0)
+lw $t0, m
 
 move $a0, $t0
 li $v0, 1
@@ -116,17 +90,6 @@ syscall
 la $a0, nextline
 li $v0, 4
 syscall
-lw $t0, 44($sp)
-
-li $t3, 1
-
-add $t0, $t0, $t3
-
-sw $t0, 44($sp)
-
-j while_3
-endWhile_4: 
-
 li $v0, 10
 syscall
 

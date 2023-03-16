@@ -1,16 +1,14 @@
 program exProcedure;
 var
-   a, b, c,  min, m: integer;
-procedure findMin(x, y: integer; a, b: real);
+   a, c, d, m: integer;
+procedure findMin(x, y: integer);
 
 begin
    if x < y then
       m:= x;
    else
       m:= y;
-   
-   if z < m then
-      m:= z;
+writeln('m=',m);
 end; { 
    
    end of procedure findMin
@@ -19,8 +17,8 @@ end; {
 
 begin
    writeln(' Enter three numbers: ');
-   readln( a, b, c);
-   findMin(a, b, c); (* Procedure call *)
+   readln( a, c, d);
+   findMin(a, c); (* Procedure call *)
    
-   writeln(' Minimum: ', min);
+   writeln(' Minimum: ', m);
 end.
