@@ -1093,11 +1093,28 @@ string AssignationStatement::generateCode(){
     code << rightSideCode.code;
     if (codeGenerationVars.find(this->id) == codeGenerationVars.end())
     {
-        if (rightSideCode.type->primitiveType == INTEGER && !rightSideCode.type->isArray)
+        if(this->isArray){
+            CodeContext indexCode;
+            this->index->generateCode(indexCode);
+            string temp = getIntTemp();
+            string address = getIntTemp();
+            releaseRegister(indexCode.place);
+            code<< indexCode.code <<endl
+            <<"li $a0, 4"<<endl
+            <<"mult $a0, "<<indexCode.place<<endl
+            <<"mflo "<< temp<<endl;
+            code<<"la "<<address<<", "<<this->id<<endl;
+            code<<"add "<<temp<<", "<<temp<<", "<<address<<endl;
+            code<<rightSideCode.code<<endl
+            <<"sw "<<rightSideCode.place<<", 0("<<temp<<")"<<endl;
+            releaseRegister(temp);
+            releaseRegister(address);
+            releaseRegister(indexCode.place);
+        }else if (rightSideCode.type->primitiveType == INTEGER)
         {
             code<<"sw "<<rightSideCode.place<<", "<<this->id<<endl;
         }
-        else if (rightSideCode.type->primitiveType == REAL && !rightSideCode.type->isArray)
+        else if (rightSideCode.type->primitiveType == REAL)
         {
             code<<"s.s "<<rightSideCode.place<<", "<<this->id<<endl;
         }
@@ -1178,7 +1195,24 @@ string MainStatement::generateCode(){
             list<string>::iterator varIt = varDeclaration->ids->begin();
             while (varIt != varDeclaration->ids->end())
             {
-                assemblyResult.data += (*varIt) + ": .word 0\n";
+                if (varDeclaration->type->isArray)
+                {
+                    ArrayType * arrayType = ((ArrayType *)varDeclaration->type);
+                    int size = 0;
+                    if (arrayType->start > 1)
+                    {
+                        size = arrayType->end - arrayType->start;
+                    }else{
+                        size = arrayType->end;
+                    }
+                    size *= 4;
+                    stringstream ss;
+                    ss<< (*varIt)<<": .space "<<size<<endl;
+                    assemblyResult.data += ss.str();
+                }else{
+                    assemblyResult.data += (*varIt) + ": .word 0\n";
+                }
+                
                 globalVars[(*varIt)] = varDeclaration->type;
                 varIt++;
             }
@@ -1287,6 +1321,7 @@ string ProcedureDeclarationStatement::generateCode(){
     return finalCode;
 }
 
+//$v0
 string FunctionDeclarationStatement::generateCode(){
     return "";
 }

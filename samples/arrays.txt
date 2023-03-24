@@ -1,23 +1,23 @@
 program exArrays;
 var
    n: array [1..10] of integer;   (* n is an array of 10 integers *)
-   i, j, a: integer;
+   i, w, a: integer;
 
 begin
    (* initialize elements of array n to 0 *)
    i:= 1;
-   j:= 1;
-   while  j < 10  do     
+   w:= 1;
+   while  w < 10  do     
    begin
        n[ i ] := i + 100;   (* set element at location i to i + 100 *)
-       j:= j + 1;
+       w:= w + 1;
        i:= i + 1;
     (* output each array element's value *)
    end;
-   j:=1;
-   while j < 10 do
+   w:=1;
+   while w < 10 do
    begin
-      writeln('Element[', j, '] = ', n[j] );
-      j:= j + 1;
+      writeln('Element[', w, '] = ', n[w] );
+      w:= w + 1;
    end;
 end.

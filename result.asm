@@ -1,81 +1,97 @@
 .data
-	a: .word 0
-c: .word 0
-d: .word 0
-m: .word 0
-string_3: .asciiz " Enter three numbers: "
-string_4: .asciiz " Minimum: "
+	n: .space 40
+i: .word 0
+w: .word 0
+a: .word 0
+string_4: .asciiz "Element["
+string_5: .asciiz "] = "
 
 	nextline: .asciiz "\n"
 .text	
 .globl main
-	findMin: 
-addiu $sp, $sp, -12
+	main: 
 
-sw $ra, 0($sp)
+li $t0, 1
+sw $t0, i
+li $t0, 1
+sw $t0, w
+while_0: 
+lw $t0, w
 
-sw $a0, 4($sp)
-sw $a1, 8($sp)
-if_0: 
-lw $t0, 4($sp)
-
-lw $t1, 8($sp)
+li $t1, 10
 
 slt $t0, $t0, $t1
 
-beqz $t0, else_1
-lw $t0, 4($sp)
-sw $t0, m
+beqz $t0, endWhile_1
+lw $t0, i
 
-j endif_2
-else_1: lw $t0, 8($sp)
-sw $t0, m
+li $t1, 100
 
-endif_2: 
+add $t0, $t0, $t1
 
-lw $ra, 0($sp)
+lw $t1, i
 
-addiu $sp, $sp, 12
-jr $ra
-main: 
+li $a0, 4
+mult $a0, $t1
+mflo $t2
+la $t3, n
+add $t2, $t2, $t3
+lw $t0, i
+
+li $t1, 100
+
+add $t0, $t0, $t1
 
 
-la $a0, string_3
-li $v0, 4
-syscall
-la $a0, nextline
-li $v0, 4
-syscall
-lw $t0, a
+sw $t0, 0($t2)
+lw $t0, w
 
-li $v0, 5
-syscall
-move $t0, $v0
-sw $t0, a
-lw $t0, c
+li $t1, 1
 
-li $v0, 5
-syscall
-move $t0, $v0
-sw $t0, c
-lw $t0, d
+add $t0, $t0, $t1
 
-li $v0, 5
-syscall
-move $t0, $v0
-sw $t0, d
-lw $t0, a
+sw $t0, w
+lw $t0, i
 
-lw $t1, c
+li $t1, 1
 
-move $a0, $t0
-move $a1, $t1
-jal findMin
+add $t0, $t0, $t1
+
+sw $t0, i
+
+j while_0
+endWhile_1: 
+li $t0, 1
+sw $t0, w
+while_2: 
+lw $t0, w
+
+li $t1, 10
+
+slt $t0, $t0, $t1
+
+beqz $t0, endWhile_3
 
 la $a0, string_4
 li $v0, 4
 syscall
-lw $t0, m
+lw $t0, w
+
+move $a0, $t0
+li $v0, 1
+syscall
+
+la $a0, string_5
+li $v0, 4
+syscall
+lw $t0, w
+
+li $a0, 4
+mult $a0, $t0
+mflo $t0
+la $t1, n
+add $t0, $t1, $t0
+lw $t0, 0($t0)
 
 move $a0, $t0
 li $v0, 1
@@ -83,6 +99,16 @@ syscall
 la $a0, nextline
 li $v0, 4
 syscall
+lw $t0, w
+
+li $t1, 1
+
+add $t0, $t0, $t1
+
+sw $t0, w
+
+j while_2
+endWhile_3: 
 li $v0, 10
 syscall
 
